@@ -1,5 +1,6 @@
 # Generates positive movie reviews by tuning a pretrained model on IMDB dataset
 # with a sentiment reward function
+# %%
 import json
 import os
 import sys
@@ -9,8 +10,8 @@ import torch
 from datasets import load_dataset
 from transformers import pipeline
 
-import trlx
 from trlx.data.default_configs import TRLConfig, default_ppo_config
+from trlx.trlx import train
 
 
 def get_positive_score(scores):
@@ -44,14 +45,15 @@ def main(hparams={}):
     imdb = load_dataset("imdb", split="train+test")
     prompts = [" ".join(review.split()[:4]) for review in imdb["text"]]
 
-    trlx.train(
+    train(
         reward_fn=reward_fn,
         prompts=prompts,
-        eval_prompts=["I don't know much about Hungarian underground"] * 256,
+        eval_prompts=["I don't know much about the Hungarian Underground"] * 256,
         config=config,
     )
 
 
 if __name__ == "__main__":
-    hparams = {} if len(sys.argv) == 1 else json.loads(sys.argv[1])
+    hparams = {} #if len(sys.argv) == 1 else json.loads(sys.argv[1])
     main(hparams)
+# %%

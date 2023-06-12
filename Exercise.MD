@@ -40,9 +40,15 @@ We want the reward function to return a single number corresponding to the value
 
 ## Positive IMDB reviews: Putting it all together
 
+### Exercise: Start with a neutral prompt and observe RLHF's impact on the model's generation
 
-## GPT-2 positive sentiment completions 
+### Exercise: Start with a negative prompt and observe RLHF's impact on the model's generation
 
+## Negative IMDB reviews
+
+### Exercise: Start with a neutral prompt and observe RLHF's impact on the model's generation
+
+### Exercise: Start with a positive prompt and observe RLHF's impact on the model's generation
 
 ## Bonus exercises
 

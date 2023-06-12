@@ -77,6 +77,7 @@ def reward_fn(samples: List[str], **kwargs) -> List[float]:
     return reward
 
 # %%
+torch.cuda.empty_cache()
 
 # Positive IMDB reviews: Putting it all together
 def get_positive_score(scores):
@@ -114,20 +115,22 @@ def main(hparams={}):
         model_path='lvwerra/gpt2-imdb',
         reward_fn=reward_fn,
         prompts=prompts,
-        eval_prompts=["I aimed my gun at the man and pulled the trigger"] * 256,
+        eval_prompts=["I was extremely disappointed "] * 256,
         config=config,
     )
 
 
 if __name__ == "__main__":
-    hparams = {} 
+    hparams = {'max_new_tokens': 100} 
     main(hparams)
 # %%
 
-# Neutral Reviews
+# Negative Reviews
+torch.cuda.empty_cache()
+
 def get_positive_score(scores):
     "Extract value associated with a positive sentiment from pipeline's output"
-    return 1 / (abs(dict(map(lambda x: tuple(x.values()), scores))["POSITIVE"] - dict(map(lambda x: tuple(x.values()), scores))["NEGATIVE"]) + 0.0001)
+    return dict(map(lambda x: tuple(x.values()), scores))["NEGATIVE"]
 
 
 def main(hparams={}):
@@ -160,12 +163,12 @@ def main(hparams={}):
         model_path='lvwerra/gpt2-imdb',
         reward_fn=reward_fn,
         prompts=prompts,
-        eval_prompts=["I aimed my gun at the man and pulled the trigger"] * 256,
+        eval_prompts=["I was incredibly impressed "] * 256,
         config=config,
     )
 
 
 if __name__ == "__main__":
-    hparams = {} 
+    hparams = {'max_new_tokens': 100} 
     main(hparams)
 # %%

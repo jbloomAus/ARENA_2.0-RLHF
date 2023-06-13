@@ -1,17 +1,28 @@
 # ARENA_2.0-RLHF
 
-
 Preparing content for the ARENA RLHF day. 
-
 
 Resources:
 
 - https://github.com/CarperAI/trlx 
+- https://blog.eleuther.ai/trlx-exploratory-analysis/
+- https://huggingface.co/blog/rlhf
+- Original RLHF paper: https://arxiv.org/pdf/1909.08593.pdf
+
 
 Goals:
 
 1. Find a working RLHF experiment and set it up.
 2. A python notebook showing our work.
+
+### RLHF_tutorial TODO
+
+1. Dataset Loading (DONE!)
+2. Reward function (DONE!)
+3. Running trlx.train (Doesn't work on notebook)
+4. Adding more diagrams and descriptions
+
+## Set Up
 
 ```{python}
 pip install -r requirements.txt 
@@ -23,9 +34,173 @@ pip install -r requirements.txt
 2. Run ppo_sentiments.py
 3. RLHF_tutorial.ipynb (in-progress)
 
-### RLHF_tutorial TODO
+## Course Content
 
-1. Dataset Loading (DONE!)
-2. Reward function (DONE!)
-3. Running trlx.train (Doesn't work on notebook)
-4. Adding more diagrams and descriptions
+### Introduction
+
+*Context: Pretraining is not enough*
+
+You've seen earlier in the course that we are able to train very large and performant models like GPT2 using next-token prediction. Such models, prior to any fine-tuning, must be steered carefully with prompts in order to generate useful output. Most language models used in services of any kind today are not only pre-trained models. Rather, we use many training techniques to make them more useful. 
+
+RLHF is one of many techniques which can convert a pre-trained model, into a more useful model for practical application.
+
+*Context: RLHF as a naive alignment strategy*
+
+The field AI alignment is concerned with aligning AI systems with our desired outcomes. There are many reasons to think that intelligent systems do not, by default, share human values or that whilst training against any objective will lead to reliable, expected outcomes being produced by AI systems. Nevertheless, training AI systems to produce outcomes that humans prefer over outcomes which they don't seems to be a concrete step towards AI alignment, which we can build on later. 
+
+Thus we get the core idea of RLHF as an alignment strategy. We care about outcomes, so we provide the AI feedback based on what we think likely outcomes of it's action are and update it produce good outcomes according to our preferences. 
+
+For more detail on RLHF, see Paul Christiano's blog post [here](https://www.alignmentforum.org/posts/vwu4kegAEZTBtpT6p/thoughts-on-the-impact-of-rlhf-research#The_case_for_a_positive_impact).
+
+*What is RLHF*
+
+Reinforcement Learning with Human Feedback (RLHF) is a RL technique where the rewards issued by the environment are determined from a human operator. 
+Often, it can be hard to specify the reward function $R : S \times A \to \mathbb{R}$ that the environment uses to issue reward to the agent, so we ask a human instead to reward/punish the agent based on the action it took. [OpenAI](https://openai.com/research/learning-from-human-preferences) uses RLHF to adjust the behaviour of models to desirable behaviour, but this can also incentivise the agent to hack the reward signal (by taking actions that look good to the human, or influencing the human to always give good rewards.)
+
+*Why does it matter?*
+
+RLHF (at the moment) is a successful method of nudging large language models towards desired behaviour when that behaviour is difficult to write as an algorithm.
+For chess, it's easy to evaluate whether an agent won/lost the game, so we can reward that directly. For text generation, it can be hard to formally specify
+that we mean by harmful or abusive text. One could have simple proxies like a filter to encourage/discourge use of particular words, and use that
+to train against, but it's very easy to construct harmful text such that no particular word in the sentence would be classed as offensive:
+"I would love to eat your pet puppy" contains no offensive words, even though the semantic meaning of the entire sentence is quite offensive. 
+A simple proxy for offensiveness might even rate this as a positive statement, as it contains "nice" words like *love* and *puppy*.
+
+However, samples from humans are expensive and slow. Even running a single batch of examples through the model could take a long time
+if we need a human to give a scalar reward for each action chosen by the model. So, the solution is to collect a lot of data from a human
+(a set of (observation, action, reward) tuples), train a reward model on this data, and then use the reward model as the reward function.
+
+*What do we know about it?*
+
+Introduction - TRLX
+
+*What is TRLX? What does it make convenient?*
+
+*Data Elements*
+
+*Models*
+
+
+## How does RLHF work in practice
+
+RLHF involves 3 stages:
+
+1. We pretrain a language model (LM) using existing supervised learning techniques.
+2. We gather labelled data from humans, and train a reward model that will act as a proxy for the human's rewards.
+3. We fine-tuning the LM with reinforcement learning. 
+
+
+### 1. Pretraining
+
+Since reinforcement learning is very sample inefficient, it is unreasonable to expect to be able 
+to train a language model from scratch using online learning. Rather, we must start with an existing 
+pre-trained model and then fine-tune it. 
+We will be using GPT-2-small as our base model to finetune.
+
+![](./media/pretraining.png)
+
+
+### 2. The Reward Model 
+
+The reward model is used to assign a reward to any given output of the model during training. 
+Rather than have reward be a simple function of the state of the world (as for RL environments like CartPole), 
+the reward model assigns a reward to a given piece of text. 
+The reward model acts like a text classifier, rewarding "good" piece of text, and punishing "bad" text.
+
+The reward model is trained on a set of prompts, hand labelled by humans into "good" and "bad".
+THis is then used to train the reward model, to act as a stand-in for the human during the fine-tuning stage.
+
+ model acts as a mapping between arbitrary text and human prefernces. 
+
+![](media/reward-model.png)
+
+### 3. Fine-Tuning with Reinforcement Learning 
+
+Finally, given some reward model and some pre-trained model, we can use an algorithm such as PPO to reward the model for producing prompt completions when the reward model predicts the completion to be preferable.
+
+In the standard RL framework, the agent recieves a reward on every timestep during interaction.
+Here, the "observation" that the agent receives is a textual prompt, and the "action" the agent takes is the choice of words
+to complete the prompt. The reward model then assigns a reward based on the prompt together with the completion from the agent,
+which is then used to compute the loss, and update the weights of the model.
+
+
+![](media/rlhf.png)
+
+## How does RLHF differ to standard RL such as PPO on Procgen?
+
+- No "environment". RLHF operates on text completions made by the pre-trained generative model.
+- Reward Model. Reward itself is generated by the reward model which itself must be trained.
+- KL Divergence penalty. The KL divergence term penalizes the RL policy from moving substantially away from the initial pretrained model with each training batch, to ensure we maintain coherent outputs, and the fine-tuned model avoids generating text that overfits to what the reward model is looking for.
+
+
+## What is TRLX?
+
+trlX is a library made for training large language models using reinforcement learning. It currently supports training using PPO or [ILQL](https://arxiv.org/abs/2206.11871) for models up to 20B using Accelerate.
+
+
+In practice, RLHF with trlX is very easy if you already have a reward model and pretrained model. 
+
+### Using trLX
+
+Using trLX, we need to choose:
+
+- Training Config:
+    - A path to the pre-trained model which you are finetuning. Eg: GPT2.
+    - 
+- A prompt dataset. 
+- A reward metric (which makes use of the reward model). 
+- Evaluation Prompts.
+
+
+
+### Reward Model: DistilBert-IMDB
+
+The reward model we are using is [distilbert-imdb](https://huggingface.co/dhlee347/distilbert-imdb), a
+version of [BERT](https://arxiv.org/abs/1810.04805) finetuned on the [IMDB](https://huggingface.co/datasets/imdb)
+dataset (introduced in [Learning Word Vectors for Sentiment Analysis](https://ai.stanford.edu/~ang/papers/acl11-WordVectorsSentimentAnalysis.pdf)) 
+a collection of 50,000 highly polar movie reviews from IMDB. Negative reviews are those with a rating of 4/10 or less (assigned class label 0),
+positive reviews are those with rating 7/10 or better (assigned class label 1). The model was finetuned with this data,
+and outputs two logits corresponding to the class estimates for (negative, positive) sentiment.
+
+
+
+```python
+# %%
+import torch
+MAIN = __name__ == '__main__'
+
+
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+
+distilbert_tokenizer = AutoTokenizer.from_pretrained("dhlee347/distilbert-imdb")
+
+distilbert_model = AutoModelForSequenceClassification.from_pretrained("dhlee347/distilbert-imdb")
+
+def reward_model(input_strings, tokenizer= distilbert_tokenizer, model = distilbert_model):
+
+    inputs = tokenizer(input_strings, padding=True, truncation=True, return_tensors="pt")
+
+    with torch.no_grad():
+        outputs = model(input_ids=inputs['input_ids'], attention_mask=inputs['attention_mask'])
+        
+    logits = outputs.logits
+    probabilities = torch.softmax(logits, dim=1)
+
+
+    
+    for in_str, reward in zip(input_strings, probabilities):
+        dict[in_str] = reward
+
+    return dict
+
+# %%
+if MAIN:
+    example_strings = ["Example string", "I'm having a good day", "You are an ugly person"]
+    reward_model(example_strings)
+# %%
+```
+
+
+## References
+
+https://huggingface.co/blog/rlhf 

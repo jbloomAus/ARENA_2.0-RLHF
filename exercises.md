@@ -2,8 +2,6 @@
 
 In this exercise, we will finetune a model pre-trained on the IMDB dataset using RLHF to generate positive reviews. 
 
-# Part 0
-
 ## Introduction
 
 ### Context: Pretraining is not enough
@@ -89,7 +87,12 @@ which is then used to compute the loss, and update the weights of the model.
 - Adding a Value Head. We add a value head to the policy/LM architecture so that we have both an actor and a critic for PPO. 
 - KL Divergence penalty. The KL divergence term penalizes the RL policy from moving substantially away from the initial pretrained model with each training batch, to ensure we maintain coherent outputs, and the fine-tuned model avoids generating text that overfits to what the reward model is looking for.
 
-## Part 1: Using RLHF to improve sentiment of GPT2 produced Movie Reviews
+## Section 1: Prompt dataset and Reward model
+
+Learning objectives
+1. Load datasets from Huggingface and break them up into prompts
+2. Generate text from Huggingface models 
+3. Output positive sentiments from models in vanilla PyTorch and Huggingface pipelines
 
 ### The IMDB dataset
 
@@ -100,7 +103,21 @@ imdb = load_dataset("imdb", split="train+test")
 ```
 #### Exercise: Figure out the positive-negative review split in the dataset
 
-The positive-negative review split will tell us the distribution of sentiments our model will output out of the box.
+The positive-negative review split will tell us the distribution of sentiments our model will output out of the box. Write a function to print out the number of samples for each label.
+
+Importance: 2/5
+Difficulty: 1/5
+
+This exercise should take between 5-10 minutes
+
+```
+def label_split(dataset) -> None:
+    # solution
+    positive_samples = dataset['label'].count(1)
+    negative_samples = dataset['label'].count(0)
+
+    print(f"Positive reviews: {positive_samples}, Negative reviews: {negative_samples}")
+```
 
 #### Exercise: Create a set of prompts 
 
@@ -110,8 +127,19 @@ In the context of the exercise to push GPT2 towards outputting reviews with more
 
 We want to collect the first few (3-5, the choice is yours) words from each review to serve as prompts for our finetuned model. The generated text from these prompts will be later used to evaluate the performance of our finetuned model.
 
+Importance: 3/5
+Difficulty: 1/5
+
+This exercise should take between 5-10 minutes
+
 Hint: Use the split function to split up each review in the dataset into words
 
+```
+def generate_prompts(dataset) -> List[str]:
+    # solution
+    prompts = [" ".join(review.split()[:4]) for review in dataset["text"]]
+    return prompts
+```
 ### GPT-2 Finetuned on IMDB
 
 The model that we will perform RLHF on is a GPT-2 model fine-tuned on the IMDB dataset, which can be found here: https://huggingface.co/lvwerra/gpt2-imdb. Since this model is finetuned on the IMDB dataset, the distribution of sentiments of its generations will be close to the distribution of sentiments of the original dataset. 
@@ -122,6 +150,20 @@ You will need to use the AutoTokenizer, AutoModelForCausalLM from the transforme
 
 Play around with generating completions from this prompt and verify whether the completions approximately fit your initial expectaions of the sentiments that the model would output.
 
+Importance: 3/5
+Difficulty: 3/5
+
+This exercise should take between 10-15 minutes
+```
+def generate_completion(prompt) -> str:
+    
+    tokenizer = AutoTokenizer.from_pretrained("lvwerra/gpt2-imdb")
+    model = AutoModelForCausalLM.from_pretrained("lvwerra/gpt2-imdb")
+    inputs = tokenizer(prompt, return_tensors='pt')
+    outputs = tokenizer.decode(model.generate(**inputs, do_sample=True, top_k=10, max_new_tokens=64).squeeze(0))
+    return outputs
+```
+
 ### The reward function
 
 Judging by the name of this chapter you might think that you would be providing the reward function yourself but sadly we will not be doing this. Instead, we will be using a language model trained to perform sentiment analysis to generate the sentiment score (higher is positive). The language model we will be using to generate sentiment scores can be found here: https://huggingface.co/lvwerra/distilbert-imdb. 
@@ -130,16 +172,33 @@ Judging by the name of this chapter you might think that you would be providing 
 
 We can use the model mentioned above in eval mode to generate sentiment scores and then transform the sentiments into rewards to be fed into the RLHF training loop.
 
-Code scaffold:
+Importance: 4/5
+Difficulty: 3/5
+
+This exercise should take between 10-15 minutes
 ```
 def reward_model(samples, tokenizer = distilbert_tokenizer, model = distilbert_model, **kwargs) -> List[float]:
 
+    # solution
     rewards = []
 
-    ### YOUR CODE HERE
+    inputs = tokenizer(samples, padding=True, truncation=True, return_tensors="pt")
+
+    with torch.no_grad():
+        outputs = model(input_ids=inputs['input_ids'], attention_mask=inputs['attention_mask'])
+    
+    logits = outputs.logits
+    probabilities = torch.softmax(logits, dim=1)
+
+    for reward in probabilities:
+       rewards.append(reward[1].item())
 
     return rewards
+
 ```
+
+Test your model on these example strings:
+example_strings = ["Example string", "I'm having a good day", "You are an ugly person"]
 
 #### Exercise: Output sentiment scores for a generated review using Huggingface pipelines
 
@@ -149,13 +208,51 @@ This is an alternate way to get a reward model working directly using Huggingfac
 
 Pipelines are a high-level way to use huggingface models for inference. Since the model that acts as our reward function will be used strictly for inference, it makes sense to wrap it in a pipeline. The huggingface Pipeline documentation can be found here: https://huggingface.co/docs/transformers/main_classes/pipelines
 
-Remember to set the top_k argument to the number of labels we expect the pipeline to return, in our case this would be 2 (Positive and Negative). 
+Remember to set the top_k argument to the number of labels we expect the pipeline to return, in our case this would be 2 (Positive and Negative). Also have a mechanism to ensure that the pipeline is using a gpu by setting the device argument appropriately.
 
 We would ideally also want to use the truncation flag and the batch_size argument to enable faster generation. For this exercise, these two things are not essential but should be experimented with as we will need these for later exercises.
+
+Importance: 4/5
+Difficulty: 2/5
+
+This exercise should take between 10-15 minutes
+
+def create_pipeline(model_path):
+    # solution
+    if torch.cuda.is_available():
+        device = int(os.environ.get("LOCAL_RANK", 0))
+    else:
+        device = -1
+
+    sentiment_fn = pipeline(
+            "sentiment-analysis",
+            model_path,
+            top_k=2,
+            truncation=True,
+            batch_size=256,
+            device=device,
+        )
+
+    return sentiment_fn
+
 
 **Part B: Map the sentiment pipeline to a reward function**
 
 We want the reward function to return a single number corresponding to the value of the positive label (the label we care about initially) for that generation rather than a dictionary containing the labels and their respective values. 
+
+Importance: 4/5
+Difficulty: 3/5
+
+This exercise should take between 10-15 minutes
+
+def get_positive_score(scores):
+    #solution
+    return dict(map(lambda x: tuple(x.values()), scores))["POSITIVE"]
+
+def reward_model(samples: List[str], **kwargs) -> List[float]:
+    #solution
+    reward = list(map(get_positive_score, sentiment_fn(samples)))
+    return reward
 
 #### Exercise: Sentiment playground
 
@@ -163,9 +260,15 @@ The reward model is now ready and you should take some time to feed in sentences
 
 We will also be using this opportunity to test whether your reward model is set up correctly.
 
+Importance: 4/5
+Difficulty: 1/5
+
+This exercise should take between 5-10 minutes
+
 ```
-happy_reward = # Reward for 'I am happy'
-sad_reward = # Reward for 'I am sad'
+test_prompts = ['I am happy', 'I am sad']
+
+rewards = reward_model(test_prompts)
 ```
 
 Code below has an interesting set of examples:
@@ -175,6 +278,10 @@ print('I want to eat', reward_model('I want to eat'))
 print('I want your puppy', reward_model('I want your puppy'))
 print('I want to eat your puppy', reward_model('I want to eat your puppy'))
 ```
+
+## Section 2: Using RLHF to improve sentiment of GPT2 produced Movie Reviews
+
+Learning objectives
 
 ### TRLX
 
@@ -197,9 +304,11 @@ These 4 objects are inputs to the train function which has already been imported
 
 **Training Config**
 
-Look below for a config that does RLHF using PPO, all hyperparameters are set to enable training and are best left untouched for the next exercise. You might want to increase max_new_tokens to get longer generations on your evaluation prompts during finetuning. 
+Look below for a config that when fed into TRLX performs RLHF using PPO, all hyperparameters are set to enable training and are best left untouched for the next exercise. You might want to increase max_new_tokens to get longer generations on your evaluation prompts during finetuning. 
 
-NOTE: Increasing max_new_tokens will increase training time. For reference, keeping everything else the same in the config below and changing max_new_tokens from 40 to 100 increases finetuning time from ~6 mins to ~10 mins assuming the number of epochs and steps stay the same as the default.
+Increasing max_new_tokens will increase training time. For reference, keeping everything else the same in the config below and changing max_new_tokens from 40 to 100 increases finetuning time from ~6 mins to ~10 mins assuming the number of epochs and steps stay the same as the default. Picking a max_new_tokens value somewhere in the middle would be the best.
+
+The model keyword specifies which model will be finetuned and we will be using the same GPT2 model that we used before to generate initial 
 
 ```
 def ppo_config():
@@ -266,39 +375,172 @@ In this particular prompt, the initial prompt choice will cause the eval reward 
 
 ## Exercise: Putting it all together - Reinforcing positive sentiment
 
-We will now be calling the train funcation and pass in the arguments as we've described above. The function will look like this:
+Importance: 4/5
+Difficulty: 3/5
+
+This exercise should take between 10-15 minutes
+
+We will now be calling the train funcation and pass in the arguments as we've described above. The train function has already been imported for you and should be called like so:
 
 ```
-def main():
-    train(
-        reward_fn = #reward_model,
-        prompts = #prompts,
-        eval_prompts = #eval_prompts,
-        config = #config
+train(
+    reward_fn = ,
+    prompts = ,
+    eval_prompts = ,
+    config = 
+) 
+```
+
+```
+# provided
+def ppo_config():
+    return TRLConfig(
+        train=TrainConfig(
+            seq_length=1024,
+            epochs=100,
+            total_steps=10000,
+            batch_size=32,
+            checkpoint_interval=10000,
+            eval_interval=100,
+            pipeline="PromptPipeline",
+            trainer="AcceleratePPOTrainer",
+        ),
+        model=ModelConfig(model_path="lvwerra/gpt2", num_layers_unfrozen=2),
+        tokenizer=TokenizerConfig(tokenizer_path="gpt2", truncation_side="right"),
+        optimizer=OptimizerConfig(
+            name="adamw", kwargs=dict(lr=3e-5, betas=(0.9, 0.95), eps=1.0e-8, weight_decay=1.0e-6)
+        ),
+        scheduler=SchedulerConfig(name="cosine_annealing", kwargs=dict(T_max=1e12, eta_min=3e-5)),
+        method=PPOConfig(
+            name="PPOConfig",
+            num_rollouts=128,
+            chunk_size=128,
+            ppo_epochs=4,
+            init_kl_coef=0.001,
+            target=None,
+            horizon=10000,
+            gamma=1,
+            lam=0.95,
+            cliprange=0.2,
+            cliprange_value=0.2,
+            vf_coef=1,
+            scale_reward="ignored",
+            ref_mean=None,
+            ref_std=None,
+            cliprange_reward=10,
+            gen_kwargs=dict(
+                max_new_tokens=64,
+                top_k=10,
+                #top_p=1.0,
+                do_sample=True,
+            ),
+        ),
     )
 
+def main() -> None:
+    # solution
+    config = ppo_config()
+
+    train(
+        reward_fn = reward_model,
+        prompts = prompts,
+        eval_prompts = ['In my opinion'] * 256, ## Feel free to try different prompts
+        config =  config
+    )
+# provided
 if __name__ == "__main__":
+    gc.collect()
     torch.cuda.empty_cache()
     main()
 ```
 
-Notice that we call torch.cuda.empty_cache() here, which is essential to free up GPU memory that might be held up as remnants of completed GPU operations or past failed runs. Running out of memory might be a common issue that you run in and running torch.cuda.empty_cache() will help you not get stuck as much. There are times when this is insufficient and you might need to restart the kernel to free up memory, you can call nvidia-smi on your terminal to see which processes are taking up GPU memory. 
+Notice that we call torch.cuda.empty_cache() here, which is essential to free up GPU memory that might be held up as remnants of completed GPU operations or past failed runs. Running out of memory might be a common issue that you run in and running torch.cuda.empty_cache() will help you not get stuck as much. There are times when this is insufficient and you might need to restart the kernel to free up memory, you can call nvidia-smi on your terminal to see how much GPU memory is currently being used. Jupyter is unfortunately quite opaque in terms of memory management and you might need to call torch.cuda.empty_cache() and gc.collect() more often than you would expect. 
 
 TRLX logs to W&B and you should be prompted to add in your W&B key at some point. Take a look at the reward graph that shows the change in reward received by completions from the eval_prompts over the course of the training run. All the prompt completions are stored in the files section under the media folder. 
 
-Things to try:
+## Exercise: Sentiment playground - Post RLHF
 
-1. Have the recurring eval_prompt be overly positive or overly negative to see the change in the reward graph. Do the finetuned models at the end have different behaviours?
+Try out your RLHF'd model, ideally after a gc.collect() and a torch.cuda.empty_cache() call to ensure there is free GPU memory. 
 
-2. Can you change the reward_fn to reinforce negative sentiment? How about neutral sentiment?
+Importance: 4/5
+Difficulty: 1/5
+
+This exercise should take between 5-10 minutes
+
+generate_completion('< Insert prompt here >')
+
+## Exercise: Change eval prompts to observe model behaviour
+
+Have the recurring eval_prompt be overly positive or overly negative to see the change in the reward graph. Example of a negative prompt would be - "I was extremely disappointed". Do the finetuned models at the end have different behaviours?
+
+Importance: 2/5
+Difficulty: 1/5
+
+This exercise should take between 5-10 minutes
+
+```
+def main() -> None:
+    # solution
+    config = ppo_config()
+
+    train(
+        reward_fn = reward_model,
+        prompts = prompts,
+        eval_prompts = ['I was extremely disappointed'] * 256, ## Feel free to try other negative prompts
+        config =  config
+    )
+
+# provided
+if __name__ == "__main__":
+    gc.collect()
+    torch.cuda.empty_cache()
+    main()
+```
+
+## Exercise: Change reward function to return high reward for neutral sentiment
+
+Can you change the reward_fn to reinforce neutral sentiment?
+
+Importance: 4/5
+Difficulty: 3/5
+
+```
+def get_neutral_score(scores):
+    #solution
+    return 1 - abs(dict(map(lambda x: tuple(x.values()), scores))["POSITIVE"] - dict(map(lambda x: tuple(x.values()), scores))["NEGATIVE"])
+
+def neutral_reward_model(samples: List[str], **kwargs) -> List[float]:
+    #solution
+    reward = list(map(get_neutral_score, sentiment_fn(samples)))
+    return reward
+
+def main() -> None:
+    # solution
+    config = ppo_config()
+
+    train(
+        reward_fn = neutral_reward_model,
+        prompts = prompts,
+        eval_prompts = ['In my opinion'] * 256, ## Feel free to try other negative prompts
+        config =  config
+    )
+
+# provided
+if __name__ == "__main__":
+    gc.collect()
+    torch.cuda.empty_cache()
+    main()
+```
 
 ## Bonus exercises
 
 ### Experiment with other huggingface models
 
+In the above exercise, we trained a GPT2 model to output IMDB reviews with majorly positive sentiments. We can follow a similar procedure to tune other models with desirable behaviours. You can swap out the reward model pipeline and the model to be finetuned with (almost) any Huggingface model. Below are a few suggestions for tasks:
+
 #### Fin-BERT finetuning GPT2
 
-#### News headlines
+FinBERT is a BERT model that outputs positive and negative sentiment of financial news. The reward of outputting positive sentiment news is entangled with outputting financial news rather than any other kind of text generation. You can RLHF vanilla GPT2 with FinBERT as the reward model to verify this phenomenon and observe its effect.
 
 #### Tiny stories
 Doing fine-tuning with tiny stories to encourage good or bad endings could be cool.
@@ -311,11 +553,11 @@ dataset: https://huggingface.co/datasets/openai/summarize_from_feedback.
 
 ### Make your own TRLX
 
-#### Calculate the KL penalty for divergence from the previous model. 
+#### Calculate the KL penalty for divergence from the previous model.
+ 
 #### Add a value head to a language model. 
 #### Write a collect rollouts function from the language model. 
-#### Write a learn function from the language model. Could modify existing ppo code for learn. Don't have to use it, we could just test it. (a bit harder to test unfortunately...)
 
-### Get maximally "positive" string according to the RLHF'd model
+### Reward Model Mechanistic interpretability  
 
-
+Have a look at: https://blog.eleuther.ai/trlx-exploratory-analysis/. A great exercise could be to replicate this or find other interesting mechanistic behaviour.

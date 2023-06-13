@@ -42,7 +42,7 @@ tokenizer = AutoTokenizer.from_pretrained("lvwerra/gpt2-imdb")
 model = AutoModelForCausalLM.from_pretrained("lvwerra/gpt2-imdb")
 
 inputs = tokenizer(prompts[3], return_tensors='pt')
-gpt2_outputs = tokenizer.decode(model.generate(**inputs, do_sample=True, top_p=1 , max_new_tokens=100).squeeze(0))
+gpt2_outputs = tokenizer.decode(model.generate(**inputs, do_sample=True, top_k=10 , max_new_tokens=100).squeeze(0))
 
 print(f'Prompt: {prompts[3]} \nGeneration: {gpt2_outputs}')
 
@@ -128,7 +128,7 @@ def ppo_config():
             pipeline="PromptPipeline",
             trainer="AcceleratePPOTrainer",
         ),
-        model=ModelConfig(model_path="lvwerra/gpt2-imdb", num_layers_unfrozen=2),
+        model=ModelConfig(model_path="lvwerra/gpt2", num_layers_unfrozen=2),
         tokenizer=TokenizerConfig(tokenizer_path="gpt2", truncation_side="right"),
         optimizer=OptimizerConfig(
             name="adamw", kwargs=dict(lr=3e-5, betas=(0.9, 0.95), eps=1.0e-8, weight_decay=1.0e-6)
@@ -152,9 +152,9 @@ def ppo_config():
             ref_std=None,
             cliprange_reward=10,
             gen_kwargs=dict(
-                max_new_tokens=100,
-                top_k=0,
-                top_p=1.0,
+                max_new_tokens=64,
+                top_k=10,
+                #top_p=1.0,
                 do_sample=True,
             ),
         ),
@@ -176,6 +176,7 @@ if __name__ == "__main__":
     main()
 
 # %%
+# FinBERT finetuning GPT2
 
 torch.cuda.empty_cache()
 
@@ -201,7 +202,7 @@ neg_config = TRLConfig(
             num_rollouts=128,
             chunk_size=128,
             ppo_epochs=4,
-            init_kl_coef=0.001,
+            init_kl_coef=0.01,
             target=None,
             horizon=10000,
             gamma=1,
@@ -215,7 +216,7 @@ neg_config = TRLConfig(
             cliprange_reward=10,
             gen_kwargs=dict(
                 max_new_tokens=100,
-                top_k=0,
+                top_k=10,
                 top_p=1.0,
                 do_sample=True,
             ),

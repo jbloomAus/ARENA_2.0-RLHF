@@ -96,11 +96,8 @@ Learning objectives
 
 ### The IMDB dataset
 
-Documentation about the IMDB dataset can be found here: https://huggingface.co/datasets/imdb. 
+Documentation about the IMDB dataset can be found here: https://huggingface.co/datasets/imdb. We want to use both the train and test splits to colect prompts.
 
-```
-imdb = load_dataset("imdb", split="train+test")
-```
 #### Exercise: Figure out the positive-negative review split in the dataset
 
 The positive-negative review split will tell us the distribution of sentiments our model will output out of the box. Write a function to print out the number of samples for each label.
@@ -117,6 +114,9 @@ def label_split(dataset) -> None:
     negative_samples = dataset['label'].count(0)
 
     print(f"Positive reviews: {positive_samples}, Negative reviews: {negative_samples}")
+
+imdb = # solution -> load_dataset("imdb", split="train+test")
+n_pos, n_neg = label_split(imdb)
 ```
 
 #### Exercise: Create a set of prompts 
@@ -554,7 +554,7 @@ dataset: https://huggingface.co/datasets/openai/summarize_from_feedback.
 ### Make your own TRLX
 
 #### Calculate the KL penalty for divergence from the previous model.
- 
+
 #### Add a value head to a language model. 
 #### Write a collect rollouts function from the language model. 
 

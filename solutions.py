@@ -3,7 +3,7 @@ import json
 import os
 import sys
 import math
-from typing import List
+import gc
 
 import torch
 from datasets import load_dataset
@@ -11,10 +11,10 @@ from transformers import pipeline
 from transformers import AutoTokenizer, AutoModelForCausalLM,  AutoModelForSequenceClassification
 from typing import Any, List, Optional, Union, Tuple
 
+import tests
 from trlx.trlx.data.default_configs import TRLConfig, TrainConfig, OptimizerConfig, SchedulerConfig, TokenizerConfig, ModelConfig
 from trlx.trlx.models.modeling_ppo import PPOConfig
 from trlx.trlx import train
-
 # %%
 
 # Exploring the IMDB dataset
@@ -23,29 +23,44 @@ imdb = load_dataset("imdb", split="train+test")
 
 ## Figure out the positive-negative review split in the dataset
 
-print(f"Total reviews: {len(imdb)}, Positive reviews: {imdb['label'].count(1)}, Negative reviews: {imdb['label'].count(0)}")
+def label_split(dataset) -> Tuple[int, int]:
+    
+    positive_samples = dataset['label'].count(1)
+    negative_samples = dataset['label'].count(0)
+
+    print(f"Positive reviews: {positive_samples}, Negative reviews: {negative_samples}")
+
+    return positive_samples, negative_samples
+
+n_pos, n_neg = label_split(imdb)
+
+tests.test_label_split(n_pos, n_neg)
 
 ### Since there are an equal number of positive and negative reviews, we can expect a model trained on this dataset to be equally likely to output positive and negative text
 
+# %%
+
 # Create a set of prompts
 
-prompts = [" ".join(review.split()[:4]) for review in imdb["text"]]
-print(f'Created a total of {len(prompts)} prompts, here\'s a sample: {prompts[:3]}')
+def generate_prompts(dataset):
+    prompts = [" ".join(review.split()[:4]) for review in dataset["text"]]
+    return prompts
 
-print(f'For reference, the entire review that the first prompt came from looks like this: {imdb["text"][0]}')
+prompts = generate_prompts(imdb)
+
 
 # %%
 
 # Load the GPT-2 model and generate reviews from prompts
-tokenizer = AutoTokenizer.from_pretrained("lvwerra/gpt2-imdb")
+def generate_completion(prompt):
+    
+    tokenizer = AutoTokenizer.from_pretrained("lvwerra/gpt2-imdb")
+    model = AutoModelForCausalLM.from_pretrained("lvwerra/gpt2-imdb")
+    inputs = tokenizer(prompt, return_tensors='pt')
+    outputs = tokenizer.decode(model.generate(**inputs, do_sample=True, top_k=10 , max_new_tokens=64).squeeze(0))
+    return outputs
 
-model = AutoModelForCausalLM.from_pretrained("lvwerra/gpt2-imdb")
-
-inputs = tokenizer(prompts[3], return_tensors='pt')
-gpt2_outputs = tokenizer.decode(model.generate(**inputs, do_sample=True, top_k=10 , max_new_tokens=100).squeeze(0))
-
-print(f'Prompt: {prompts[3]} \nGeneration: {gpt2_outputs}')
-
+generate_completion(prompts[0]) 
 
 # %%
 
@@ -71,26 +86,31 @@ def reward_model(samples, tokenizer= distilbert_tokenizer, model = distilbert_mo
     return rewards
 
 example_strings = ["Example string", "I'm having a good day", "You are an ugly person"]
-reward_model(example_strings)
+rewards = reward_model(example_strings)
+
+tests.test_reward_model(rewards)
 # %%
 
 # Create a huggingface pipeline to outputs sentiment scores for a generated review
 
-if torch.cuda.is_available():
-    device = int(os.environ.get("LOCAL_RANK", 0))
-else:
-    device = -1
+def create_pipeline(model_path):
+    if torch.cuda.is_available():
+        device = int(os.environ.get("LOCAL_RANK", 0))
+    else:
+        device = -1
 
-sentiment_fn = pipeline(
-        "sentiment-analysis",
-        "lvwerra/distilbert-imdb",
-        top_k=2,
-        truncation=True,
-        batch_size=256,
-        device=device,
-    )
+    sentiment_fn = pipeline(
+            "sentiment-analysis",
+            model_path,
+            top_k=2,
+            truncation=True,
+            batch_size=256,
+            device=device,
+        )
 
-sentiment_fn(example_strings)
+    return sentiment_fn
+
+sentiment_fn = create_pipeline("lvwerra/distilbert-imdb")
 
 # %%
 
@@ -104,10 +124,12 @@ def reward_model(samples: List[str], **kwargs) -> List[float]:
     reward = list(map(get_positive_score, sentiment_fn(samples)))
     return reward
 # %%
-happy_reward = reward_model('I am happy') # Reward for 'I am happy'
-sad_reward = reward_model('I am sad') # Reward for 'I am sad'
-
 # Sentiment playground
+
+test_prompts = ['I am happy', 'I am sad']
+
+rewards = reward_model(test_prompts)
+tests.test_reward_test_prompts(rewards)
 
 print('I want to eat', reward_model('I want to eat'))
 print('I want your puppy', reward_model('I want your puppy'))
@@ -172,6 +194,54 @@ def main():
 
 
 if __name__ == "__main__":
+    gc.collect()
+    torch.cuda.empty_cache()
+    main()
+
+# %%
+generate_completion('This day is horrible')
+
+# %%
+def main() -> None:
+    # solution
+    config = ppo_config()
+
+    train(
+        reward_fn = reward_model,
+        prompts = prompts,
+        eval_prompts = ['I was extremely disappointed'] * 256, ## Feel free to try other negative prompts
+        config =  config
+    )
+
+# provided
+if __name__ == "__main__":
+    gc.collect()
+    torch.cuda.empty_cache()
+    main()
+# %%
+def get_neutral_score(scores):
+    #solution
+    return 1 - abs(dict(map(lambda x: tuple(x.values()), scores))["POSITIVE"] - dict(map(lambda x: tuple(x.values()), scores))["NEGATIVE"])
+
+def neutral_reward_model(samples: List[str], **kwargs) -> List[float]:
+    #solution
+    reward = list(map(get_neutral_score, sentiment_fn(samples)))
+    return reward
+
+def main() -> None:
+    # solution
+    config = ppo_config()
+
+    train(
+        reward_fn = neutral_reward_model,
+        prompts = prompts,
+        eval_prompts = ['In my opinion'] * 256, ## Feel free to try other negative prompts
+        config =  config
+    )
+
+# provided
+if __name__ == "__main__":
+    gc.collect()
     torch.cuda.empty_cache()
     main()
 
@@ -240,8 +310,6 @@ fin_sentiment_fn = pipeline(
 example_strings = ["Example string", "I'm having a good day", "You are an ugly person"]
 
 print(fin_sentiment_fn(example_strings))
-
-# %%
 
 def get_positive_score(scores):
     "Extract value associated with a positive sentiment from pipeline's output"

@@ -9,6 +9,7 @@ import torch
 from datasets import load_dataset
 from transformers import pipeline
 from transformers import AutoTokenizer, AutoModelForCausalLM,  AutoModelForSequenceClassification
+from typing import Any, List, Optional, Union, Tuple
 
 from trlx.trlx.data.default_configs import TRLConfig, TrainConfig, OptimizerConfig, SchedulerConfig, TokenizerConfig, ModelConfig
 from trlx.trlx.models.modeling_ppo import PPOConfig
@@ -102,10 +103,19 @@ def get_positive_score(scores):
 def reward_model(samples: List[str], **kwargs) -> List[float]:
     reward = list(map(get_positive_score, sentiment_fn(samples)))
     return reward
-
-reward_model(example_strings)
-
 # %%
+happy_reward = reward_model('I am happy') # Reward for 'I am happy'
+sad_reward = reward_model('I am sad') # Reward for 'I am sad'
+
+# Sentiment playground
+
+print('I want to eat', reward_model('I want to eat'))
+print('I want your puppy', reward_model('I want your puppy'))
+print('I want to eat your puppy', reward_model('I want to eat your puppy'))
+# %%
+
+# Putting it all together - Reinforcing positive sentiment
+
 def ppo_config():
     return TRLConfig(
         train=TrainConfig(
@@ -150,30 +160,20 @@ def ppo_config():
         ),
     )
 
-# %%
-torch.cuda.empty_cache()
+def main():
+    config = ppo_config()
 
-# Positive IMDB reviews: Putting it all together
-
-
-config = ppo_config()
-
-if torch.cuda.is_available():
-    device = int(os.environ.get("LOCAL_RANK", 0))
-else:
-    device = -1
-
-train(
-    reward_fn=reward_model,
-    prompts=prompts,
-    eval_prompts=["I was extremely disappointed "] * 256,
-    config=config,
+    train(
+        reward_fn=reward_model,
+        prompts=prompts,
+        eval_prompts=["I was extremely disappointed "] * 256,
+        config=config,
 )
 
 
-#if __name__ == "__main__":
-#    hparams = {} 
-#    main(hparams)
+if __name__ == "__main__":
+    torch.cuda.empty_cache()
+    main()
 # %%
 
 # RLHF on vanilla GPT2 to generate positive reviews

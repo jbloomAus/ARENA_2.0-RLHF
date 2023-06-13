@@ -284,15 +284,37 @@ if __name__ == "__main__":
 
 Notice that we call torch.cuda.empty_cache() here, which is essential to free up GPU memory that might be held up as remnants of completed GPU operations or past failed runs. Running out of memory might be a common issue that you run in and running torch.cuda.empty_cache() will help you not get stuck as much. There are times when this is insufficient and you might need to restart the kernel to free up memory, you can call nvidia-smi on your terminal to see which processes are taking up GPU memory. 
 
+TRLX logs to W&B and you should be prompted to add in your W&B key at some point. Take a look at the reward graph that shows the change in reward received by completions from the eval_prompts over the course of the training run. All the prompt completions are stored in the files section under the media folder. 
+
+Things to try:
+
+1. Have the recurring eval_prompt be overly positive or overly negative to see the change in the reward graph. Do the finetuned models at the end have different behaviours?
+
+2. Can you change the reward_fn to reinforce negative sentiment? How about neutral sentiment?
+
 ## Bonus exercises
 
 ### Experiment with other huggingface models
 
 #### Fin-BERT finetuning GPT2
+
 #### News headlines
 
-### Redwood paper - RLHF for sentiment 
-- probably do something analogous
+#### Tiny stories
+Doing fine-tuning with tiny stories to encourage good or bad endings could be cool.
+Model (can load in from transformerlens but also) https://huggingface.co/roneneldan/TinyStories-1M
+dataset: https://huggingface.co/datasets/roneneldan/TinyStories
+
+### Summarising
+Doing RLHF for summarizing could be a cool bonus task. As is done in several papers. I don't know how feasible this is in practice
+dataset: https://huggingface.co/datasets/openai/summarize_from_feedback.
+
+### Make your own TRLX
+
+#### Calculate the KL penalty for divergence from the previous model. 
+#### Add a value head to a language model. 
+#### Write a collect rollouts function from the language model. 
+#### Write a learn function from the language model. Could modify existing ppo code for learn. Don't have to use it, we could just test it. (a bit harder to test unfortunately...)
 
 ### Get maximally "positive" string according to the RLHF'd model
 

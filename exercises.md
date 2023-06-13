@@ -95,13 +95,22 @@ which is then used to compute the loss, and update the weights of the model.
 
 Documentation about the IMDB dataset can be found here: https://huggingface.co/datasets/imdb. 
 
+```
+imdb = load_dataset("imdb", split="train+test")
+```
 #### Exercise: Figure out the positive-negative review split in the dataset
 
-Based on your above results, you should get an idea of the likelihood of a model finetuned on this dataset to generate a positive review. 
+The positive-negative review split will tell us the distribution of sentiments our model will output out of the box.
 
 #### Exercise: Create a set of prompts 
 
+A prompt to the model can look like "Today was not fun ", "In the event of " or "Mary gave John a ". These prompts will serve as the starting point for model generations during the RLHF process.
+
+In the context of the exercise to push GPT2 towards outputting reviews with more positive sentiment, we want to try and have a set of prompts that can produce varying kinds of sentiments rather than just one kind of sentiment. This set of prompts essentially forms our "observation space" and all completions are "actions", if our observation space contains primarily positive sentiment the model will not update heavily and will potentially still output negative sentiment when a prompt heavily favors it. Ideally we want our set of prompts to have a mix of sentiments.
+
 We want to collect the first few (3-5, the choice is yours) words from each review to serve as prompts for our finetuned model. The generated text from these prompts will be later used to evaluate the performance of our finetuned model.
+
+Hint: Use the split function to split up each review in the dataset into words
 
 ### GPT-2 Finetuned on IMDB
 
@@ -110,6 +119,8 @@ The model that we will perform RLHF on is a GPT-2 model fine-tuned on the IMDB d
 #### Exercise: Load the GPT-2 model and generate reviews from prompts
 
 You will need to use the AutoTokenizer, AutoModelForCausalLM from the transformers package. You might want to use the generate method of the GPT-2 model that you load, if you do you should use top_p sampling and set the max_new_tokens argument to something that's large enough.
+
+Play around with generating completions from this prompt and verify whether the completions approximately fit your initial expectaions of the sentiments that the model would output.
 
 ### The reward function
 
@@ -159,7 +170,7 @@ NOTE: Increasing max_new_tokens will increase training time. For reference, keep
 
 **Prompt Dataset**
 
-
+The prompt dataset is the dataset that we'll use to generate reviews from the model specified in the config. These generations will be then be scored by the chosen reward function, this score will be used as the reward that is the weights of the model will be updated 
 #### Reward Metric
 
 #### Evaluation Prompts

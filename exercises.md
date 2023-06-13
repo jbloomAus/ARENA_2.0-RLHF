@@ -117,6 +117,8 @@ def label_split(dataset) -> None:
 
 imdb = # solution -> load_dataset("imdb", split="train+test")
 n_pos, n_neg = label_split(imdb)
+
+tests.test_label_split(n_pos, n_neg)
 ```
 
 #### Exercise: Create a set of prompts 
@@ -199,6 +201,9 @@ def reward_model(samples, tokenizer = distilbert_tokenizer, model = distilbert_m
 
 Test your model on these example strings:
 example_strings = ["Example string", "I'm having a good day", "You are an ugly person"]
+rewards = reward_model(example_strings)
+
+tests.test_reward_model(rewards)
 
 #### Exercise: Output sentiment scores for a generated review using Huggingface pipelines
 
@@ -217,6 +222,7 @@ Difficulty: 2/5
 
 This exercise should take between 10-15 minutes
 
+```
 def create_pipeline(model_path):
     # solution
     if torch.cuda.is_available():
@@ -235,6 +241,8 @@ def create_pipeline(model_path):
 
     return sentiment_fn
 
+sentiment_fn = create_pipeline("lvwerra/distilbert-imdb")
+```
 
 **Part B: Map the sentiment pipeline to a reward function**
 
@@ -269,6 +277,7 @@ This exercise should take between 5-10 minutes
 test_prompts = ['I am happy', 'I am sad']
 
 rewards = reward_model(test_prompts)
+tests.test_reward_test_prompts(rewards)
 ```
 
 Code below has an interesting set of examples:

@@ -176,6 +176,142 @@ train(
 #    main(hparams)
 # %%
 
-# Negative Reviews
+# RLHF on vanilla GPT2 to generate positive reviews
+torch.cuda.empty_cache()
+
+neg_config = TRLConfig(
+        train=TrainConfig(
+            seq_length=1024,
+            epochs=100,
+            total_steps=10000,
+            batch_size=32,
+            checkpoint_interval=10000,
+            eval_interval=100,
+            pipeline="PromptPipeline",
+            trainer="AcceleratePPOTrainer",
+        ),
+        model=ModelConfig(model_path="gpt2", num_layers_unfrozen=2),
+        tokenizer=TokenizerConfig(tokenizer_path="gpt2", truncation_side="right"),
+        optimizer=OptimizerConfig(
+            name="adamw", kwargs=dict(lr=3e-5, betas=(0.9, 0.95), eps=1.0e-8, weight_decay=1.0e-6)
+        ),
+        scheduler=SchedulerConfig(name="cosine_annealing", kwargs=dict(T_max=1e12, eta_min=3e-5)),
+        method=PPOConfig(
+            name="PPOConfig",
+            num_rollouts=128,
+            chunk_size=128,
+            ppo_epochs=4,
+            init_kl_coef=0.001,
+            target=None,
+            horizon=10000,
+            gamma=1,
+            lam=0.95,
+            cliprange=0.2,
+            cliprange_value=0.2,
+            vf_coef=1,
+            scale_reward="ignored",
+            ref_mean=None,
+            ref_std=None,
+            cliprange_reward=10,
+            gen_kwargs=dict(
+                max_new_tokens=100,
+                top_k=0,
+                top_p=1.0,
+                do_sample=True,
+            ),
+        ),
+    )
+
+train(
+    reward_fn=reward_model,
+    prompts=prompts,
+    eval_prompts=["I saw this movie "] * 256,
+    config=neg_config,
+)
+
+
+# %%
+
+torch.cuda.empty_cache()
+
+neg_config = TRLConfig(
+        train=TrainConfig(
+            seq_length=1024,
+            epochs=100,
+            total_steps=10000,
+            batch_size=32,
+            checkpoint_interval=10000,
+            eval_interval=100,
+            pipeline="PromptPipeline",
+            trainer="AcceleratePPOTrainer",
+        ),
+        model=ModelConfig(model_path="gpt2", num_layers_unfrozen=2),
+        tokenizer=TokenizerConfig(tokenizer_path="gpt2", truncation_side="right"),
+        optimizer=OptimizerConfig(
+            name="adamw", kwargs=dict(lr=3e-5, betas=(0.9, 0.95), eps=1.0e-8, weight_decay=1.0e-6)
+        ),
+        scheduler=SchedulerConfig(name="cosine_annealing", kwargs=dict(T_max=1e12, eta_min=3e-5)),
+        method=PPOConfig(
+            name="PPOConfig",
+            num_rollouts=128,
+            chunk_size=128,
+            ppo_epochs=4,
+            init_kl_coef=0.001,
+            target=None,
+            horizon=10000,
+            gamma=1,
+            lam=0.95,
+            cliprange=0.2,
+            cliprange_value=0.2,
+            vf_coef=1,
+            scale_reward="ignored",
+            ref_mean=None,
+            ref_std=None,
+            cliprange_reward=10,
+            gen_kwargs=dict(
+                max_new_tokens=100,
+                top_k=0,
+                top_p=1.0,
+                do_sample=True,
+            ),
+        ),
+    )
+
+if torch.cuda.is_available():
+    device = int(os.environ.get("LOCAL_RANK", 0))
+else:
+    device = -1
+
+fin_sentiment_fn = pipeline(
+        "sentiment-analysis",
+        "ProsusAI/finbert",
+        top_k=3,
+        truncation=True,
+        batch_size=256,
+        device=device,
+    )
+
+example_strings = ["Example string", "I'm having a good day", "You are an ugly person"]
+
+print(fin_sentiment_fn(example_strings))
+
+# %%
+
+def get_positive_score(scores):
+    "Extract value associated with a positive sentiment from pipeline's output"
+    return dict(map(lambda x: tuple(x.values()), scores))["positive"]
+
+def fin_reward_model(samples: List[str], **kwargs) -> List[float]:
+    reward = list(map(get_positive_score, fin_sentiment_fn(samples)))
+    return reward
+
+train(
+    reward_fn=fin_reward_model,
+    prompts=prompts,
+    eval_prompts=["In today's headlines: "] * 256,
+    config=neg_config,
+)
+# %%
+
 torch.cuda.empty_cache()
 # %%

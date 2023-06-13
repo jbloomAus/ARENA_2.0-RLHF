@@ -117,12 +117,15 @@ Using trLX, we need to choose:
 
 Look below for a config that does RLHF using PPO, all hyperparameters are set to enable training and are best left untouched for the next exercise. You might want to increase max_new_tokens to get longer generations on your evaluation prompts during finetuning. 
 
-NOTE: Increasing max_new_tokens will increase training time. For reference, keeping everything else the same in the config below and changing max_new_tokens from 40 to 100 increases finetuning time from ~6 mins to ~10 mins.
+NOTE: Increasing max_new_tokens will increase training time. For reference, keeping everything else the same in the config below and changing max_new_tokens from 40 to 100 increases finetuning time from ~6 mins to ~10 mins assuming the number of epochs and steps stay the same as the default.
 
 #### Prompt Dataset
 
-The prompt dataset is the dataset that we'll use to generate reviews from the model specified in the config. These generations will be then be scored by the chosen reward function, this score will be used as the reward that is  the weights of the model will be updated 
-#### Reward Metric
+The prompt dataset is the dataset that we'll use to generate reviews from the model specified in the config. These generations will be then be scored by the chosen reward function. This score will be used as the reward that is provided to PPO which will in turn update the weights of the model towards maximising the reward returned from the reward function.
+
+#### Reward Function
+
+The reward function 
 
 #### Evaluation Prompts
 
@@ -148,6 +151,7 @@ The prompt dataset is the dataset that we'll use to generate reviews from the mo
 
 ### Redwood paper - RLHF for sentiment 
 - probably do something analogous
+
 ### Get maximally "positive" string according to the RLHF'd model
 
 

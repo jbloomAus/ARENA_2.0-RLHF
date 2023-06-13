@@ -155,26 +155,25 @@ torch.cuda.empty_cache()
 
 # Positive IMDB reviews: Putting it all together
 
-def main(hparams={}):
-    # Merge sweep config with default config if given
-    config = ppo_config()
 
-    if torch.cuda.is_available():
-        device = int(os.environ.get("LOCAL_RANK", 0))
-    else:
-        device = -1
+config = ppo_config()
 
-    train(
-        reward_fn=reward_model,
-        prompts=prompts,
-        eval_prompts=["I was extremely disappointed "] * 256,
-        config=config,
-    )
+if torch.cuda.is_available():
+    device = int(os.environ.get("LOCAL_RANK", 0))
+else:
+    device = -1
+
+train(
+    reward_fn=reward_model,
+    prompts=prompts,
+    eval_prompts=["I was extremely disappointed "] * 256,
+    config=config,
+)
 
 
-if __name__ == "__main__":
-    hparams = {} 
-    main(hparams)
+#if __name__ == "__main__":
+#    hparams = {} 
+#    main(hparams)
 # %%
 
 # Negative Reviews

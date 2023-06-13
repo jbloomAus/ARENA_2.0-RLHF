@@ -143,6 +143,11 @@ The prompt dataset is the dataset that we'll use to generate reviews from the mo
 
 ### Experiment with other huggingface models
 
+#### Fin-BERT finetuning GPT2
+#### News headlines
+
+### Redwood paper - RLHF for sentiment 
+- probably do something analogous
 ### Get maximally "positive" string according to the RLHF'd model
 
 

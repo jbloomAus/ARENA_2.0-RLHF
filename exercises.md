@@ -88,7 +88,7 @@ We can use the model mentioned above in eval mode to generate sentiment scores a
 
 Pipelines are a high-level way to use huggingface models for inference. Since the model that acts as our reward function will be used strictly for inference, it makes sense to wrap it in a pipeline. The huggingface Pipeline documentation can be found here: https://huggingface.co/docs/transformers/main_classes/pipelines
 
-Remeber to set the top_k argument to the number of labels we expect the pipeline to return, in our case this would be 2 (Positive and Negative). 
+Remember to set the top_k argument to the number of labels we expect the pipeline to return, in our case this would be 2 (Positive and Negative). 
 
 We would ideally also want to use the truncation flag and the batch_size argument to enable faster generation. For this exercise, these two things are not essential but should be experimented with as we will need these for later exercises.
 

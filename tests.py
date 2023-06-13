@@ -1,4 +1,5 @@
 from datasets import load_dataset
+from transformers import AutoTokenizer, AutoModelForCausalLM,  AutoModelForSequenceClassification
 
 def test_label_split(n_pos, n_neg):
 
@@ -9,7 +10,10 @@ def test_label_split(n_pos, n_neg):
 
 def test_reward_model(rewards):
 
-    assert rewards, [0.5429518818855286, 0.9708014726638794, 0.04642578586935997]
+    from solutions import reward_model
+
+    example_strings = ["Example string", "I'm having a good day", "You are an ugly person"]
+    assert rewards, reward_model(example_strings) #[0.5429518818855286, 0.9708014726638794, 0.04642578586935997]
     print('All tests passed!')
 
 def test_reward_test_prompts(rewards):

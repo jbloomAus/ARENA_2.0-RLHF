@@ -94,9 +94,15 @@ Learning objectives
 2. Generate text from Huggingface models 
 3. Output positive sentiments from models in vanilla PyTorch and Huggingface pipelines
 
-### The IMDB dataset
+### Exercise: The IMDB dataset
 
 Documentation about the IMDB dataset can be found here: https://huggingface.co/datasets/imdb. We want to use both the train and test splits to colect prompts.
+
+Importance: 3/5
+Difficulty: 1/5
+
+if MAIN:
+    imdb = load_dataset("imdb", split="train+test")
 
 #### Exercise: Figure out the positive-negative review split in the dataset
 
@@ -115,10 +121,10 @@ def label_split(dataset) -> None:
 
     print(f"Positive reviews: {positive_samples}, Negative reviews: {negative_samples}")
 
-imdb = # solution -> load_dataset("imdb", split="train+test")
-n_pos, n_neg = label_split(imdb)
+if MAIN:
+    n_pos, n_neg = label_split(imdb)
+    tests.test_label_split(n_pos, n_neg)
 
-tests.test_label_split(n_pos, n_neg)
 ```
 
 #### Exercise: Create a set of prompts 
@@ -137,10 +143,12 @@ This exercise should take between 5-10 minutes
 Hint: Use the split function to split up each review in the dataset into words
 
 ```
-def generate_prompts(dataset) -> List[str]:
-    # solution
+def generate_prompts(dataset):
     prompts = [" ".join(review.split()[:4]) for review in dataset["text"]]
     return prompts
+
+if MAIN:
+    prompts = generate_prompts(imdb)
 ```
 ### GPT-2 Finetuned on IMDB
 
@@ -164,6 +172,9 @@ def generate_completion(prompt) -> str:
     inputs = tokenizer(prompt, return_tensors='pt')
     outputs = tokenizer.decode(model.generate(**inputs, do_sample=True, top_k=10, max_new_tokens=64).squeeze(0))
     return outputs
+
+if MAIN:
+    generate_completion(prompts[0]) 
 ```
 
 ### The reward function
@@ -196,6 +207,11 @@ def reward_model(samples, tokenizer = distilbert_tokenizer, model = distilbert_m
        rewards.append(reward[1].item())
 
     return rewards
+
+if MAIN:
+    example_strings = ["Example string", "I'm having a good day", "You are an ugly person"]
+    rewards = reward_model(example_strings)
+    tests.test_reward_model(rewards)
 
 ```
 
@@ -242,6 +258,9 @@ def create_pipeline(model_path):
     return sentiment_fn
 
 sentiment_fn = create_pipeline("lvwerra/distilbert-imdb")
+
+if MAIN:
+    sentiment_fn = create_pipeline("lvwerra/distilbert-imdb")
 ```
 
 **Part B: Map the sentiment pipeline to a reward function**
@@ -274,15 +293,18 @@ Difficulty: 1/5
 This exercise should take between 5-10 minutes
 
 ```
-test_prompts = ['I am happy', 'I am sad']
+if MAIN:
+    test_prompts = ['I am happy', 'I am sad']
 
-rewards = reward_model(test_prompts)
-tests.test_reward_test_prompts(rewards)
-```
+    rewards = reward_model(test_prompts)
+    tests.test_reward_test_prompts(rewards)
 
-Code below has an interesting set of examples:
+    print('I want to eat', reward_model('I want to eat'))
+    print('I want your puppy', reward_model('I want your puppy'))
+    print('I want to eat your puppy', reward_model('I want to eat your puppy'))
 
-```
+## Code below has an interesting set of examples:
+
 print('I want to eat', reward_model('I want to eat'))
 print('I want your puppy', reward_model('I want your puppy'))
 print('I want to eat your puppy', reward_model('I want to eat your puppy'))
@@ -457,7 +479,7 @@ def main() -> None:
         config =  config
     )
 # provided
-if __name__ == "__main__":
+if MAIN:
     gc.collect()
     torch.cuda.empty_cache()
     main()
@@ -476,7 +498,10 @@ Difficulty: 1/5
 
 This exercise should take between 5-10 minutes
 
-generate_completion('< Insert prompt here >')
+```
+if MAIN:
+    generate_completion('< Insert prompt here >')
+```
 
 ## Exercise: Change eval prompts to observe model behaviour
 
@@ -500,7 +525,7 @@ def main() -> None:
     )
 
 # provided
-if __name__ == "__main__":
+if MAIN:
     gc.collect()
     torch.cuda.empty_cache()
     main()
@@ -535,7 +560,7 @@ def main() -> None:
     )
 
 # provided
-if __name__ == "__main__":
+if MAIN:
     gc.collect()
     torch.cuda.empty_cache()
     main()
@@ -551,21 +576,19 @@ In the above exercise, we trained a GPT2 model to output IMDB reviews with major
 
 FinBERT is a BERT model that outputs positive and negative sentiment of financial news. The reward of outputting positive sentiment news is entangled with outputting financial news rather than any other kind of text generation. You can RLHF vanilla GPT2 with FinBERT as the reward model to verify this phenomenon and observe its effect.
 
+FinBERT: https://huggingface.co/ProsusAI/finbert
+Vanilla GPT2: https://huggingface.co/gpt2
+
 #### Tiny stories
-Doing fine-tuning with tiny stories to encourage good or bad endings could be cool.
-Model (can load in from transformerlens but also) https://huggingface.co/roneneldan/TinyStories-1M
-dataset: https://huggingface.co/datasets/roneneldan/TinyStories
+Doing fine-tuning with tiny stories to encourage good or bad endings of initial prompts to vanilla GPT2.
 
-### Summarising
-Doing RLHF for summarizing could be a cool bonus task. As is done in several papers. I don't know how feasible this is in practice
-dataset: https://huggingface.co/datasets/openai/summarize_from_feedback.
+Reward model: https://huggingface.co/roneneldan/TinyStories-1M
 
-### Make your own TRLX
 
-#### Calculate the KL penalty for divergence from the previous model.
+### Calculate the KL penalty for divergence from the previous model.
+Dive into the trlX trainer here: https://github.com/CarperAI/trlx/blob/404217b2f3f295ff0f68851524517064acc43a15/trlx/trainer/accelerate_ppo_trainer.py#L251
 
-#### Add a value head to a language model. 
-#### Write a collect rollouts function from the language model. 
+This is the function that implements many parts of the RLHF training loop, the KL divergence steps can be found starting line 430. Try replicating this code for a toy model to calculate KL divergence between this model and a copy of it during training.
 
 ### Reward Model Mechanistic interpretability  
 

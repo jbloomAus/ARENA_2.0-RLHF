@@ -15,11 +15,14 @@ import tests
 from trlx.trlx.data.default_configs import TRLConfig, TrainConfig, OptimizerConfig, SchedulerConfig, TokenizerConfig, ModelConfig
 from trlx.trlx.models.modeling_ppo import PPOConfig
 from trlx.trlx import train
+
+MAIN = __name__ == '__main__'
 # %%
 
 # Exploring the IMDB dataset
 
-imdb = load_dataset("imdb", split="train+test")
+if MAIN:
+    imdb = load_dataset("imdb", split="train+test")
 
 ## Figure out the positive-negative review split in the dataset
 
@@ -32,9 +35,9 @@ def label_split(dataset) -> Tuple[int, int]:
 
     return positive_samples, negative_samples
 
-n_pos, n_neg = label_split(imdb)
-
-tests.test_label_split(n_pos, n_neg)
+if MAIN:
+    n_pos, n_neg = label_split(imdb)
+    tests.test_label_split(n_pos, n_neg)
 
 ### Since there are an equal number of positive and negative reviews, we can expect a model trained on this dataset to be equally likely to output positive and negative text
 
@@ -46,8 +49,8 @@ def generate_prompts(dataset):
     prompts = [" ".join(review.split()[:4]) for review in dataset["text"]]
     return prompts
 
-prompts = generate_prompts(imdb)
-
+if MAIN:
+    prompts = generate_prompts(imdb)
 
 # %%
 
@@ -60,15 +63,15 @@ def generate_completion(prompt):
     outputs = tokenizer.decode(model.generate(**inputs, do_sample=True, top_k=10 , max_new_tokens=64).squeeze(0))
     return outputs
 
-generate_completion(prompts[0]) 
+if MAIN:
+    generate_completion(prompts[0]) 
 
 # %%
 
-distilbert_tokenizer = AutoTokenizer.from_pretrained("lvwerra/distilbert-imdb")
+def reward_model(samples, **kwargs):
 
-distilbert_model =  AutoModelForSequenceClassification.from_pretrained("lvwerra/distilbert-imdb")
-
-def reward_model(samples, tokenizer= distilbert_tokenizer, model = distilbert_model, **kwargs):
+    tokenizer = AutoTokenizer.from_pretrained("lvwerra/distilbert-imdb")
+    model =  AutoModelForSequenceClassification.from_pretrained("lvwerra/distilbert-imdb")
 
     rewards = []
 
@@ -85,10 +88,10 @@ def reward_model(samples, tokenizer= distilbert_tokenizer, model = distilbert_mo
 
     return rewards
 
-example_strings = ["Example string", "I'm having a good day", "You are an ugly person"]
-rewards = reward_model(example_strings)
-
-tests.test_reward_model(rewards)
+if MAIN:
+    example_strings = ["Example string", "I'm having a good day", "You are an ugly person"]
+    rewards = reward_model(example_strings)
+    tests.test_reward_model(rewards)
 # %%
 
 # Create a huggingface pipeline to outputs sentiment scores for a generated review
@@ -110,7 +113,8 @@ def create_pipeline(model_path):
 
     return sentiment_fn
 
-sentiment_fn = create_pipeline("lvwerra/distilbert-imdb")
+if MAIN:
+    sentiment_fn = create_pipeline("lvwerra/distilbert-imdb")
 
 # %%
 
@@ -126,14 +130,15 @@ def reward_model(samples: List[str], **kwargs) -> List[float]:
 # %%
 # Sentiment playground
 
-test_prompts = ['I am happy', 'I am sad']
+if MAIN:
+    test_prompts = ['I am happy', 'I am sad']
 
-rewards = reward_model(test_prompts)
-tests.test_reward_test_prompts(rewards)
+    rewards = reward_model(test_prompts)
+    tests.test_reward_test_prompts(rewards)
 
-print('I want to eat', reward_model('I want to eat'))
-print('I want your puppy', reward_model('I want your puppy'))
-print('I want to eat your puppy', reward_model('I want to eat your puppy'))
+    print('I want to eat', reward_model('I want to eat'))
+    print('I want your puppy', reward_model('I want your puppy'))
+    print('I want to eat your puppy', reward_model('I want to eat your puppy'))
 # %%
 
 # Putting it all together - Reinforcing positive sentiment
@@ -150,7 +155,7 @@ def ppo_config():
             pipeline="PromptPipeline",
             trainer="AcceleratePPOTrainer",
         ),
-        model=ModelConfig(model_path="lvwerra/gpt2", num_layers_unfrozen=2),
+        model=ModelConfig(model_path="lvwerra/gpt2-imdb", num_layers_unfrozen=2),
         tokenizer=TokenizerConfig(tokenizer_path="gpt2", truncation_side="right"),
         optimizer=OptimizerConfig(
             name="adamw", kwargs=dict(lr=3e-5, betas=(0.9, 0.95), eps=1.0e-8, weight_decay=1.0e-6)
@@ -193,13 +198,14 @@ def main():
 )
 
 
-if __name__ == "__main__":
+if MAIN:
     gc.collect()
     torch.cuda.empty_cache()
     main()
 
 # %%
-generate_completion('This day is horrible')
+if MAIN:
+    generate_completion('This day is horrible')
 
 # %%
 def main() -> None:
@@ -214,7 +220,7 @@ def main() -> None:
     )
 
 # provided
-if __name__ == "__main__":
+if MAIN:
     gc.collect()
     torch.cuda.empty_cache()
     main()
@@ -240,7 +246,7 @@ def main() -> None:
     )
 
 # provided
-if __name__ == "__main__":
+if MAIN:
     gc.collect()
     torch.cuda.empty_cache()
     main()
@@ -248,83 +254,84 @@ if __name__ == "__main__":
 # %%
 # FinBERT finetuning GPT2
 
-torch.cuda.empty_cache()
+if MAIN:
+    torch.cuda.empty_cache()
 
-neg_config = TRLConfig(
-        train=TrainConfig(
-            seq_length=1024,
-            epochs=100,
-            total_steps=10000,
-            batch_size=32,
-            checkpoint_interval=10000,
-            eval_interval=100,
-            pipeline="PromptPipeline",
-            trainer="AcceleratePPOTrainer",
-        ),
-        model=ModelConfig(model_path="gpt2", num_layers_unfrozen=2),
-        tokenizer=TokenizerConfig(tokenizer_path="gpt2", truncation_side="right"),
-        optimizer=OptimizerConfig(
-            name="adamw", kwargs=dict(lr=3e-5, betas=(0.9, 0.95), eps=1.0e-8, weight_decay=1.0e-6)
-        ),
-        scheduler=SchedulerConfig(name="cosine_annealing", kwargs=dict(T_max=1e12, eta_min=3e-5)),
-        method=PPOConfig(
-            name="PPOConfig",
-            num_rollouts=128,
-            chunk_size=128,
-            ppo_epochs=4,
-            init_kl_coef=0.01,
-            target=None,
-            horizon=10000,
-            gamma=1,
-            lam=0.95,
-            cliprange=0.2,
-            cliprange_value=0.2,
-            vf_coef=1,
-            scale_reward="ignored",
-            ref_mean=None,
-            ref_std=None,
-            cliprange_reward=10,
-            gen_kwargs=dict(
-                max_new_tokens=100,
-                top_k=10,
-                top_p=1.0,
-                do_sample=True,
+    gpt2_config = TRLConfig(
+            train=TrainConfig(
+                seq_length=1024,
+                epochs=100,
+                total_steps=10000,
+                batch_size=32,
+                checkpoint_interval=10000,
+                eval_interval=100,
+                pipeline="PromptPipeline",
+                trainer="AcceleratePPOTrainer",
             ),
-        ),
+            model=ModelConfig(model_path="gpt2", num_layers_unfrozen=2),
+            tokenizer=TokenizerConfig(tokenizer_path="gpt2", truncation_side="right"),
+            optimizer=OptimizerConfig(
+                name="adamw", kwargs=dict(lr=3e-5, betas=(0.9, 0.95), eps=1.0e-8, weight_decay=1.0e-6)
+            ),
+            scheduler=SchedulerConfig(name="cosine_annealing", kwargs=dict(T_max=1e12, eta_min=3e-5)),
+            method=PPOConfig(
+                name="PPOConfig",
+                num_rollouts=128,
+                chunk_size=128,
+                ppo_epochs=4,
+                init_kl_coef=0.01,
+                target=None,
+                horizon=10000,
+                gamma=1,
+                lam=0.95,
+                cliprange=0.2,
+                cliprange_value=0.2,
+                vf_coef=1,
+                scale_reward="ignored",
+                ref_mean=None,
+                ref_std=None,
+                cliprange_reward=10,
+                gen_kwargs=dict(
+                    max_new_tokens=100,
+                    top_k=10,
+                    top_p=1.0,
+                    do_sample=True,
+                ),
+            ),
+        )
+
+    if torch.cuda.is_available():
+        device = int(os.environ.get("LOCAL_RANK", 0))
+    else:
+        device = -1
+
+    fin_sentiment_fn = pipeline(
+            "sentiment-analysis",
+            "ProsusAI/finbert",
+            top_k=3,
+            truncation=True,
+            batch_size=256,
+            device=device,
+        )
+
+    example_strings = ["Example string", "I'm having a good day", "You are an ugly person"]
+
+    print(fin_sentiment_fn(example_strings))
+
+    def get_positive_score(scores):
+        "Extract value associated with a positive sentiment from pipeline's output"
+        return dict(map(lambda x: tuple(x.values()), scores))["positive"]
+
+    def fin_reward_model(samples: List[str], **kwargs) -> List[float]:
+        reward = list(map(get_positive_score, fin_sentiment_fn(samples)))
+        return reward
+
+    train(
+        reward_fn=fin_reward_model,
+        prompts=prompts,
+        eval_prompts=["In today's headlines: "] * 256,
+        config=gpt2_config,
     )
-
-if torch.cuda.is_available():
-    device = int(os.environ.get("LOCAL_RANK", 0))
-else:
-    device = -1
-
-fin_sentiment_fn = pipeline(
-        "sentiment-analysis",
-        "ProsusAI/finbert",
-        top_k=3,
-        truncation=True,
-        batch_size=256,
-        device=device,
-    )
-
-example_strings = ["Example string", "I'm having a good day", "You are an ugly person"]
-
-print(fin_sentiment_fn(example_strings))
-
-def get_positive_score(scores):
-    "Extract value associated with a positive sentiment from pipeline's output"
-    return dict(map(lambda x: tuple(x.values()), scores))["positive"]
-
-def fin_reward_model(samples: List[str], **kwargs) -> List[float]:
-    reward = list(map(get_positive_score, fin_sentiment_fn(samples)))
-    return reward
-
-train(
-    reward_fn=fin_reward_model,
-    prompts=prompts,
-    eval_prompts=["In today's headlines: "] * 256,
-    config=neg_config,
-)
 # %%
 
 # %%

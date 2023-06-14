@@ -12,9 +12,9 @@ from transformers import AutoTokenizer, AutoModelForCausalLM,  AutoModelForSeque
 from typing import Any, List, Optional, Union, Tuple
 
 import tests
-from trlx.trlx.data.default_configs import TRLConfig, TrainConfig, OptimizerConfig, SchedulerConfig, TokenizerConfig, ModelConfig
-from trlx.trlx.models.modeling_ppo import PPOConfig
-from trlx.trlx import train
+from trlx.data.default_configs import TRLConfig, TrainConfig, OptimizerConfig, SchedulerConfig, TokenizerConfig, ModelConfig
+from trlx.models.modeling_ppo import PPOConfig
+from trlx import train
 
 MAIN = __name__ == '__main__'
 # %%
@@ -78,7 +78,7 @@ def reward_model(samples, **kwargs):
     inputs = tokenizer(samples, padding=True, truncation=True, return_tensors="pt")
 
     with torch.no_grad():
-        outputs = model(input_ids=inputs['input_ids'], attention_mask=inputs['attention_mask'])
+        outputs = model(input_ids=inputs['input_ids'], attention_mask=inputs['attention_mask'], **kwargs)
     
     logits = outputs.logits
     probabilities = torch.softmax(logits, dim=1)
